@@ -1,14 +1,11 @@
-# tracker/views.py
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 import json
 from decimal import Decimal
 
-# Assuming you have defined the Expense model in tracker/models.py
 from .models import Expense 
 
-# View to render the main page
 def index(request):
     """Renders the main expense tracker HTML page."""
     return render(request, 'index.html')
@@ -67,4 +64,5 @@ def api_expenses(request):
             Expense.objects.all().delete()
             return JsonResponse({}, status=204) # 204 No Content is standard for DELETE
         except Exception as e:
+
             return JsonResponse({'error': f'Database error: {e}'}, status=500)
