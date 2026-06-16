@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Expense Tracker</title>
     {% load static %} 
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=6">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=7">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -13,7 +13,13 @@
         <div class="nav-brand">💵 Expense Tracker</div>
         <div class="nav-links">
             <span class="user-greeting">Welcome, {{ request.user.username }}</span>
-            <button id="theme-toggle" class="btn-outline" title="Toggle Dark Mode">🌙</button>
+            <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_theme">
+                <button type="submit" class="btn-outline" title="Toggle Dark Mode">
+                    {% if theme == 'dark' %}☀️{% else %}🌙{% endif %}
+                </button>
+            </form>
             <a href="{% url 'export_csv' %}" class="btn-outline">Export CSV</a>
             <a href="{% url 'export_excel' %}" class="btn-outline">Export Excel</a>
             <form action="{% url 'logout' %}" method="post" style="display:inline;">
@@ -23,6 +29,17 @@
         </div>
     </nav>
 
+    {% if messages %}
+    <div class="toast-container">
+        {% for message in messages %}
+            <div class="toast {% if message.tags %}{{ message.tags }}{% endif %} show static-toast">
+                <span>{% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}❌{% else %}ℹ️{% endif %}</span> 
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <main class="dashboard-container">
         
         <section class="analytics-section">
@@ -31,29 +48,36 @@
             <div class="budget-container" style="margin-bottom: 1.5rem; background: var(--surface); padding: 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow-sm);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <h3>Monthly Budget</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="number" id="budget-input" placeholder="Set Limit" style="width: 100px; padding: 0.25rem; border: 1px solid var(--border); border-radius: 4px;">
-                        <button id="save-budget-btn" class="btn-primary" style="padding: 0.25rem 0.75rem;">Save</button>
-                    </div>
+                    <form method="POST" style="display: flex; gap: 0.5rem;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="set_budget">
+                        <input type="number" name="budget_amount" value="{{ budget_amount }}" placeholder="Set Limit" style="width: 100px; padding: 0.25rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-color); color: var(--text-main);">
+                        <button type="submit" class="btn-primary" style="padding: 0.25rem 0.75rem;">Save</button>
+                    </form>
                 </div>
                 <div class="progress-bar-bg" style="width: 100%; height: 12px; background: var(--border); border-radius: 6px; overflow: hidden;">
-                    <div id="budget-progress" style="height: 100%; background: #10B981; width: 0%; transition: width 0.3s, background-color 0.3s;"></div>
+                    <div id="budget-progress" style="height: 100%; width: {{ budget_percent }}%; 
+                        {% if budget_percent >= 100 %}background-color: var(--danger);
+                        {% elif budget_percent >= 80 %}background-color: var(--warning);
+                        {% else %}background-color: var(--success);{% endif %}"></div>
                 </div>
-                <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-align: right;"><span id="budget-text">$0 / $0 (0%)</span></p>
+                <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-align: right;">
+                    <span>${{ total_expenses|floatformat:2 }} / ${{ budget_amount|floatformat:2 }} ({{ budget_percent }}%)</span>
+                </p>
             </div>
 
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Total Expenses</h3>
-                    <p id="total-expenses-stat">$0.00</p>
+                    <p id="total-expenses-stat">${{ total_expenses|floatformat:2 }}</p>
                 </div>
                 <div class="stat-card">
                     <h3>Period Expenses</h3>
-                    <p id="monthly-expenses-stat">$0.00</p>
+                    <p id="monthly-expenses-stat">${{ total_expenses|floatformat:2 }}</p>
                 </div>
                 <div class="stat-card">
                     <h3>Highest Spending Category</h3>
-                    <p id="highest-category-stat">None</p>
+                    <p id="highest-category-stat">{{ highest_category }}</p>
                 </div>
             </div>
             
@@ -67,74 +91,163 @@
 
         <section class="interaction-area">
             <div class="form-section">
-                <h2 id="form-title">Add New Expense</h2>
-                <form id="expense-form">
-                    <input type="hidden" id="edit-expense-id" value="">
+                <h2>{% if edit_expense %}Edit Expense{% else %}Add New Expense{% endif %}</h2>
+                <form method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="{% if edit_expense %}edit_expense{% else %}add_expense{% endif %}">
+                    {% if edit_expense %}
+                    <input type="hidden" name="expense_id" value="{{ edit_expense.id }}">
+                    {% endif %}
+                    
                     <div class="form-group">
                         <label for="description">Description</label>
-                        <input type="text" id="description" name="description" required placeholder="e.g. Groceries">
+                        <input type="text" id="description" name="description" required placeholder="e.g. Groceries" value="{% if edit_expense %}{{ edit_expense.description }}{% endif %}">
                     </div>
                     <div class="form-group">
                         <label for="amount">Amount ($)</label>
-                        <input type="number" id="amount" name="amount" step="0.01" required placeholder="0.00">
+                        <input type="number" id="amount" name="amount" step="0.01" required placeholder="0.00" value="{% if edit_expense %}{{ edit_expense.amount }}{% endif %}">
                     </div>
                     <div class="form-group">
                         <label for="expense-date">Date</label>
-                        <input type="date" id="expense-date" name="expense-date">
+                        <input type="date" id="expense-date" name="expense-date" required value="{% if edit_expense %}{{ edit_expense.created_at|date:'Y-m-d' }}{% else %}{{ today }}{% endif %}">
                     </div>
                     <div class="form-group">
                         <label for="category">Category</label>
                         <select id="category" name="category">
-                            <option value="Food">Food</option>
-                            <option value="Housing">Housing</option>
-                            <option value="Transport">Transport</option>
-                            <option value="Entertainment">Entertainment</option>
-                            <option value="Other">Other</option>
+                            <option value="Food" {% if edit_expense and edit_expense.category == 'Food' %}selected{% endif %}>Food</option>
+                            <option value="Housing" {% if edit_expense and edit_expense.category == 'Housing' %}selected{% endif %}>Housing</option>
+                            <option value="Transport" {% if edit_expense and edit_expense.category == 'Transport' %}selected{% endif %}>Transport</option>
+                            <option value="Entertainment" {% if edit_expense and edit_expense.category == 'Entertainment' %}selected{% endif %}>Entertainment</option>
+                            <option value="Other" {% if edit_expense and edit_expense.category == 'Other' %}selected{% endif %}>Other</option>
                         </select>
                     </div>
-                    <button type="submit" id="submit-btn" class="w-100 btn-primary">Add Expense</button>
-                    <button type="button" id="cancel-edit-btn" class="w-100 btn-outline" style="display: none; margin-top: 0.5rem;">Cancel Edit</button>
+                    <button type="submit" class="w-100 btn-primary">{% if edit_expense %}Update Expense{% else %}Add Expense{% endif %}</button>
+                    {% if edit_expense %}
+                    <a href="{% url 'index' %}" class="w-100 btn-outline" style="display: block; text-align: center; margin-top: 0.5rem;">Cancel Edit</a>
+                    {% endif %}
                 </form>
             </div>
 
             <div class="list-section">
                 <div class="list-header">
                     <h2>Recent Transactions</h2>
-                    <button id="clear-expenses-btn" class="btn-danger">Clear All</button>
+                    <form method="POST" onsubmit="return confirm('Are you sure you want to clear ALL expenses? This cannot be undone.');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="clear_all">
+                        <button type="submit" class="btn-danger">Clear All</button>
+                    </form>
                 </div>
                 
-                <div class="filters-container" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
+                <form method="GET" class="filters-container" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
                     <label style="font-size: 0.9rem; color: var(--text-muted);">From:</label>
-                    <input type="date" id="filter-start-date" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px;">
+                    <input type="date" name="start_date" value="{{ start_date|default_if_none:'' }}" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-color); color: var(--text-main);" onchange="this.form.submit()">
                     
                     <label style="font-size: 0.9rem; color: var(--text-muted);">To:</label>
-                    <input type="date" id="filter-end-date" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px;">
+                    <input type="date" name="end_date" value="{{ end_date|default_if_none:'' }}" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-color); color: var(--text-main);" onchange="this.form.submit()">
                     
-                    <select id="filter-category" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; margin-left: auto;">
-                        <option value="All">All Categories</option>
-                        <option value="Food">Food</option>
-                        <option value="Housing">Housing</option>
-                        <option value="Transport">Transport</option>
-                        <option value="Entertainment">Entertainment</option>
-                        <option value="Other">Other</option>
+                    <select name="category" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; margin-left: auto; background: var(--bg-color); color: var(--text-main);" onchange="this.form.submit()">
+                        <option value="All" {% if category_filter == 'All' %}selected{% endif %}>All Categories</option>
+                        <option value="Food" {% if category_filter == 'Food' %}selected{% endif %}>Food</option>
+                        <option value="Housing" {% if category_filter == 'Housing' %}selected{% endif %}>Housing</option>
+                        <option value="Transport" {% if category_filter == 'Transport' %}selected{% endif %}>Transport</option>
+                        <option value="Entertainment" {% if category_filter == 'Entertainment' %}selected{% endif %}>Entertainment</option>
+                        <option value="Other" {% if category_filter == 'Other' %}selected{% endif %}>Other</option>
                     </select>
-                </div>
+                </form>
 
-                <ul class="expense-list" id="expense-list">
-                    <!-- Expenses will be dynamically added here -->
+                <ul class="expense-list">
+                    {% for expense in page_obj %}
+                    <li>
+                        <div class="expense-details">
+                            <strong>{{ expense.description }}</strong>
+                            <p>Category: {{ expense.category }} | Date: {{ expense.created_at|date:'Y-m-d' }}</p>
+                        </div>
+                        <div class="expense-actions" style="display: flex; align-items: center; gap: 1rem;">
+                            <div class="expense-amount">-${{ expense.amount|floatformat:2 }}</div>
+                            
+                            <a href="?edit_id={{ expense.id }}{% if query_string %}&{{ query_string }}{% endif %}" class="btn-edit-item" style="text-decoration: none;" title="Edit this expense">✏️</a>
+                            
+                            <form method="POST" style="display: inline;" onsubmit="return confirm('Delete this expense?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete_expense">
+                                <input type="hidden" name="expense_id" value="{{ expense.id }}">
+                                <button type="submit" class="btn-delete-item" style="background: none; border: none; color: var(--danger); cursor: pointer; font-weight: bold;" title="Delete this expense">X</button>
+                            </form>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li style="justify-content: center; color: var(--text-muted);">No expenses found in this period.</li>
+                    {% endfor %}
                 </ul>
                 
                 <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
-                    <button id="prev-page-btn" class="btn-outline" disabled>Previous</button>
-                    <span id="page-indicator" style="color: var(--text-muted); font-size: 0.9rem;">Page 1</span>
-                    <button id="next-page-btn" class="btn-outline" disabled>Next</button>
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="btn-outline" style="text-decoration:none;">Previous</a>
+                    {% else %}
+                        <button class="btn-outline" disabled>Previous</button>
+                    {% endif %}
+                    
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="btn-outline" style="text-decoration:none;">Next</a>
+                    {% else %}
+                        <button class="btn-outline" disabled>Next</button>
+                    {% endif %}
                 </div>
             </div>
         </section>
     </main>
 
-    <div id="toast-container" class="toast-container"></div>
+    <script>
+        // Minimal inline script just to render the Chart.js visualization
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('categoryChart');
+            if (!ctx) return;
 
-    <script src="{% static 'script.js' %}?v=6"></script>
+            const categoryData = {{ category_data_json|safe }};
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDark ? '#F9FAFB' : '#6B7280';
+
+            const labels = Object.keys(categoryData);
+            const values = Object.values(categoryData);
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Expenses by Category',
+                        data: values,
+                        backgroundColor: [
+                            '#4F46E5', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'
+                        ],
+                        borderWidth: isDark ? 2 : 0,
+                        borderColor: isDark ? '#1F2937' : '#FFFFFF',
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: textColor }
+                        }
+                    }
+                }
+            });
+            
+            // Auto-dismiss static toasts
+            const toasts = document.querySelectorAll('.static-toast');
+            toasts.forEach(toast => {
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            });
+        });
+    </script>
 </body>
 </html>
