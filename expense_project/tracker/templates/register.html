@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Expense Tracker</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=2">
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <h1>Register</h1>
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="auth-btn">Sign Up</button>
+        </form>
+        <p class="auth-link">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+    </div>
+</body>
+</html>
