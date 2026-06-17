@@ -17,6 +17,37 @@ import json
 
 from .models import Expense, UserBudget
 
+from django import forms
+from django.contrib.auth.models import User
+
+# ----------------------------------------------------
+# Custom Forms
+# ----------------------------------------------------
+class EmailRegistrationForm(UserCreationForm):
+    email = forms.EmailField(required=True, label="Email Address")
+    
+    class Meta:
+        model = User
+        fields = ("email",)
+        
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(username=email).exists():
+            raise forms.ValidationError("A user with that email already exists.")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.username = self.cleaned_data["email"]
+        user.email = self.cleaned_data["email"]
+        if commit:
+            user.save()
+        return user
+
+class EmailAuthenticationForm(AuthenticationForm):
+    username = forms.EmailField(label="Email Address", widget=forms.EmailInput(attrs={'autofocus': True}))
+
+
 # ----------------------------------------------------
 # Authentication Views
 # ----------------------------------------------------
@@ -24,28 +55,28 @@ def register_view(request):
     if request.user.is_authenticated:
         return redirect('index')
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = EmailRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request, user)
             messages.success(request, "Account created successfully!")
             return redirect('index')
     else:
-        form = UserCreationForm()
+        form = EmailRegistrationForm()
     return render(request, 'register.html', {'form': form})
 
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('index')
     if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
+        form = EmailAuthenticationForm(data=request.POST, request=request)
         if form.is_valid():
             user = form.get_user()
             login(request, user)
             messages.success(request, f"Welcome back, {user.username}!")
             return redirect('index')
     else:
-        form = AuthenticationForm()
+        form = EmailAuthenticationForm(request=request)
     return render(request, 'login.html', {'form': form})
 
 def logout_view(request):
