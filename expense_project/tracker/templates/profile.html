@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Settings - Expense Tracker</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=8">
+</head>
+<body class="auth-body">
+    
+    {% if messages %}
+    <div class="toast-container">
+        {% for message in messages %}
+            <div class="toast {% if message.tags %}{{ message.tags }}{% endif %} show static-toast">
+                <span>{% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}❌{% else %}ℹ️{% endif %}</span> 
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="auth-container" style="max-width: 500px; text-align: left;">
+        <h1 style="text-align: center;">Profile Settings</h1>
+        
+        <form method="post" class="auth-form" style="margin-bottom: 2rem;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_email">
+            <h3 style="margin-bottom: 1rem; color: var(--text-main);">Update Email Address</h3>
+            <div class="form-group">
+                <label>Current Email</label>
+                <input type="email" name="email" value="{{ request.user.email }}" required>
+            </div>
+            <button type="submit" class="btn-primary w-100">Update Email</button>
+        </form>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_password">
+            <h3 style="margin-bottom: 1rem; color: var(--text-main);">Change Password</h3>
+            {{ password_form.as_p }}
+            <button type="submit" class="btn-danger w-100" style="margin-top: 1rem;">Update Password</button>
+        </form>
+        
+        <div style="text-align: center; margin-top: 2rem;">
+            <a href="{% url 'index' %}" class="btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toasts = document.querySelectorAll('.static-toast');
+            toasts.forEach(toast => {
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            });
+        });
+    </script>
+</body>
+</html>

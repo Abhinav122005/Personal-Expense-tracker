@@ -8,14 +8,55 @@
     <link rel="stylesheet" href="{% static 'styles.css' %}?v=2">
 </head>
 <body class="auth-body">
+    {% if messages %}
+    <div class="toast-container">
+        {% for message in messages %}
+            <div class="toast {% if message.tags %}{{ message.tags }}{% endif %} show static-toast">
+                <span>{% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}❌{% else %}ℹ️{% endif %}</span> 
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="auth-container">
         <h1>Register</h1>
+        <style>
+            .errorlist { display: none !important; }
+        </style>
         <form method="post" class="auth-form">
             {% csrf_token %}
-            {{ form.as_p }}
+            <p>
+                <label for="id_email">Email Address:</label>
+                <input type="email" name="email" maxlength="320" required id="id_email">
+            </p>
+            <p>
+                <label for="id_display_name">Username:</label>
+                <input type="text" name="display_name" maxlength="150" required id="id_display_name">
+            </p>
+            <p>
+                <label for="id_gender">Gender:</label>
+                <input type="text" name="gender" maxlength="20" required id="id_gender">
+            </p>
+            <p>
+                <label for="id_password">Password:</label>
+                <input type="password" name="password" required id="id_password" minlength="8">
+            </p>
             <button type="submit" class="auth-btn">Sign Up</button>
         </form>
         <p class="auth-link">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toasts = document.querySelectorAll('.static-toast');
+            toasts.forEach(toast => {
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            });
+        });
+    </script>
 </body>
 </html>

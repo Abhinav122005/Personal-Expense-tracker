@@ -15,55 +15,152 @@ from django.core.paginator import Paginator
 import openpyxl
 import json
 
+from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
+
 from .models import Expense, UserBudget
 
-from django import forms
-from django.contrib.auth.models import User
+User = get_user_model()
 
 # ----------------------------------------------------
 # Custom Forms
 # ----------------------------------------------------
-class EmailRegistrationForm(UserCreationForm):
-    email = forms.EmailField(required=True, label="Email Address")
-    
-    class Meta:
-        model = User
-        fields = ("email",)
-        
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        if User.objects.filter(username=email).exists():
-            raise forms.ValidationError("A user with that email already exists.")
-        return email
-
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        user.username = self.cleaned_data["email"]
-        user.email = self.cleaned_data["email"]
-        if commit:
-            user.save()
-        return user
-
 class EmailAuthenticationForm(AuthenticationForm):
     username = forms.EmailField(label="Email Address", widget=forms.EmailInput(attrs={'autofocus': True}))
 
 
 # ----------------------------------------------------
+# Profile View
+# ----------------------------------------------------
+@login_required(login_url='login')
+def profile_view(request):
+    user = request.user
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'update_email':
+            new_email = request.POST.get('email')
+            if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+                messages.error(request, "This email is already in use by another account.")
+            else:
+                user.email = new_email
+                user.save()
+                messages.success(request, "Email updated successfully!")
+            return redirect('profile')
+            
+        elif action == 'update_password':
+            password_form = PasswordChangeForm(user, request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)  # Keep the user logged in
+                messages.success(request, "Password updated successfully!")
+                return redirect('profile')
+            else:
+                for field, errors in password_form.errors.items():
+                    for error in errors:
+                        messages.error(request, error)
+    else:
+        password_form = PasswordChangeForm(user)
+        
+    return render(request, 'profile.html', {
+        'password_form': password_form,
+        'theme': request.session.get('theme', 'light')
+    })
+
+
+# ----------------------------------------------------
 # Authentication Views
 # ----------------------------------------------------
+import random
+from django.core.mail import send_mail
+from .serializers import RegistrationSerializer, OTPVerificationSerializer
+from .models import EmailOTP
+import uuid
+
 def register_view(request):
     if request.user.is_authenticated:
         return redirect('index')
+    
     if request.method == 'POST':
-        form = EmailRegistrationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            messages.success(request, "Account created successfully!")
-            return redirect('index')
-    else:
-        form = EmailRegistrationForm()
-    return render(request, 'register.html', {'form': form})
+        serializer = RegistrationSerializer(data=request.POST)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            # Generate 6-digit OTP
+            otp_code = str(random.randint(100000, 999999))
+            
+            # Save OTP to database (overwrite if exists)
+            EmailOTP.objects.update_or_create(email=email, defaults={'otp_code': otp_code})
+            
+            # Send OTP Email
+            try:
+                send_mail(
+                    'Your Expense Tracker OTP Code',
+                    f'Your verification code is: {otp_code}',
+                    'noreply@expensetracker.local',
+                    [email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                messages.error(request, "Failed to send email. Check console or SMTP settings.")
+                print(f"EMAIL SEND ERROR: {e}")
+            
+            # Save registration data in session
+            request.session['registration_data'] = serializer.validated_data
+            messages.success(request, f"OTP sent to {email}. Please verify.")
+            return redirect('verify_otp')
+        else:
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
+    
+    return render(request, 'register.html')
+
+def verify_otp_view(request):
+    if request.user.is_authenticated:
+        return redirect('index')
+        
+    if 'registration_data' not in request.session:
+        messages.error(request, "Session expired. Please register again.")
+        return redirect('register')
+        
+    if request.method == 'POST':
+        serializer = OTPVerificationSerializer(data=request.POST)
+        if serializer.is_valid():
+            reg_data = request.session['registration_data']
+            email = reg_data['email']
+            otp_code = serializer.validated_data['otp_code']
+            
+            otp_record = EmailOTP.objects.filter(email=email).first()
+            
+            if otp_record and otp_record.otp_code == otp_code:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                # OTP is valid! Create the user.
+                user = User.objects.create_user(
+                    email=email,
+                    password=reg_data['password'],
+                    display_name=reg_data['display_name'],
+                    gender=reg_data['gender']
+                )
+                
+                otp_record.delete()  # Clean up OTP
+                del request.session['registration_data'] # Clean up session
+                
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                messages.success(request, "Account created successfully!")
+                return redirect('index')
+            else:
+                messages.error(request, "Invalid OTP code. Please try again.")
+        else:
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    messages.error(request, error)
+                    
+    return render(request, 'verify_otp.html')
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -73,11 +170,115 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            messages.success(request, f"Welcome back, {user.username}!")
+            messages.success(request, f"Welcome back, {user.display_name}!")
             return redirect('index')
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, error)
     else:
         form = EmailAuthenticationForm(request=request)
     return render(request, 'login.html', {'form': form})
+
+# ----------------------------------------------------
+# Custom Forgot Password OTP Views
+# ----------------------------------------------------
+from .serializers import ForgotPasswordEmailSerializer, ResetPasswordSerializer
+
+def forgot_password_view(request):
+    if request.user.is_authenticated:
+        return redirect('index')
+        
+    if request.method == 'POST':
+        serializer = ForgotPasswordEmailSerializer(data=request.POST)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            otp_code = str(random.randint(100000, 999999))
+            
+            EmailOTP.objects.update_or_create(email=email, defaults={'otp_code': otp_code})
+            
+            try:
+                send_mail(
+                    'Password Reset OTP Code',
+                    f'Your password reset verification code is: {otp_code}',
+                    'noreply@expensetracker.local',
+                    [email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                messages.error(request, "Failed to send email. Check console or SMTP settings.")
+                print(f"EMAIL SEND ERROR: {e}")
+                
+            request.session['reset_email'] = email
+            messages.success(request, f"OTP sent to {email}. Please verify.")
+            return redirect('verify_reset_otp')
+        else:
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    messages.error(request, error)
+                    
+    return render(request, 'forgot_password.html')
+
+def verify_reset_otp_view(request):
+    if request.user.is_authenticated:
+        return redirect('index')
+        
+    if 'reset_email' not in request.session:
+        messages.error(request, "Session expired. Please request a new OTP.")
+        return redirect('forgot_password')
+        
+    if request.method == 'POST':
+        serializer = OTPVerificationSerializer(data=request.POST)
+        if serializer.is_valid():
+            email = request.session['reset_email']
+            otp_code = serializer.validated_data['otp_code']
+            
+            otp_record = EmailOTP.objects.filter(email=email).first()
+            
+            if otp_record and otp_record.otp_code == otp_code:
+                # Valid OTP! Mark session as authorized to reset password
+                request.session['can_reset_password'] = True
+                otp_record.delete()
+                messages.success(request, "Code verified! Please enter your new password.")
+                return redirect('reset_password')
+            else:
+                messages.error(request, "Invalid OTP code. Please try again.")
+        else:
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    messages.error(request, error)
+                    
+    return render(request, 'verify_reset_otp.html')
+
+def reset_password_view(request):
+    if request.user.is_authenticated:
+        return redirect('index')
+        
+    if not request.session.get('can_reset_password'):
+        messages.error(request, "Unauthorized. Please verify your OTP first.")
+        return redirect('forgot_password')
+        
+    if request.method == 'POST':
+        serializer = ResetPasswordSerializer(data=request.POST)
+        if serializer.is_valid():
+            email = request.session.get('reset_email')
+            user = get_user_model().objects.get(email=email)
+            
+            user.set_password(serializer.validated_data['password'])
+            user.save()
+            
+            # Clean up session
+            del request.session['reset_email']
+            del request.session['can_reset_password']
+            
+            messages.success(request, "Password has been reset successfully! You can now log in.")
+            return redirect('login')
+        else:
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    messages.error(request, error)
+                    
+    return render(request, 'reset_password.html')
 
 def logout_view(request):
     logout(request)
@@ -257,7 +458,7 @@ def export_csv(request):
     expenses = Expense.objects.filter(user=request.user).order_by('-created_at')
     
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="expenses_{request.user.username}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="expenses_{request.user.email}.csv"'
     
     writer = csv.writer(response)
     writer.writerow(['Description', 'Amount', 'Category', 'Date'])
@@ -272,7 +473,7 @@ def export_excel(request):
     expenses = Expense.objects.filter(user=request.user).order_by('-created_at')
     
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="expenses_{request.user.username}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="expenses_{request.user.email}.xlsx"'
     
     workbook = openpyxl.Workbook()
     worksheet = workbook.active

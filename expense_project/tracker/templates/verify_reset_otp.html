@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Expense Tracker</title>
+    <title>Verify Reset Code - Expense Tracker</title>
     {% load static %}
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=8">
 </head>
 <body class="auth-body">
     {% if messages %}
@@ -20,17 +20,17 @@
     {% endif %}
 
     <div class="auth-container">
-        <h1>Login</h1>
-        <style>
-            .errorlist { display: none !important; }
-        </style>
+        <h1>Verify Code</h1>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">We sent a 6-digit code to <strong>{{ request.session.reset_email }}</strong></p>
         <form method="post" class="auth-form">
             {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit" class="auth-btn">Login</button>
+            <p>
+                <label for="id_otp_code">Enter 6-Digit Code:</label>
+                <input type="text" name="otp_code" maxlength="6" minlength="6" required id="id_otp_code" autofocus autocomplete="off">
+            </p>
+            <button type="submit" class="auth-btn">Verify Code</button>
         </form>
-        <p class="auth-link" style="margin-top: 10px;"><a href="{% url 'forgot_password' %}">Forgot Password?</a></p>
-        <p class="auth-link">Don't have an account? <a href="{% url 'register' %}">Register here</a></p>
+        <p class="auth-link"><a href="{% url 'forgot_password' %}">Resend code</a></p>
     </div>
 
     <script>
