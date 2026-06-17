@@ -1,4 +1,5 @@
 # tracker/views.py
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib.auth import login, logout
@@ -100,12 +101,12 @@ def register_view(request):
                 send_mail(
                     'Your Expense Tracker OTP Code',
                     f'Your verification code is: {otp_code}',
-                    'noreply@expensetracker.local',
+                    settings.EMAIL_HOST_USER,
                     [email],
                     fail_silently=False,
                 )
             except Exception as e:
-                messages.error(request, "Failed to send email. Check console or SMTP settings.")
+                messages.error(request, f"Failed to send email. Error: {str(e)}")
                 print(f"EMAIL SEND ERROR: {e}")
             
             # Save registration data in session
@@ -201,12 +202,12 @@ def forgot_password_view(request):
                 send_mail(
                     'Password Reset OTP Code',
                     f'Your password reset verification code is: {otp_code}',
-                    'noreply@expensetracker.local',
+                    settings.EMAIL_HOST_USER,
                     [email],
                     fail_silently=False,
                 )
             except Exception as e:
-                messages.error(request, "Failed to send email. Check console or SMTP settings.")
+                messages.error(request, f"Failed to send email. Error: {str(e)}")
                 print(f"EMAIL SEND ERROR: {e}")
                 
             request.session['reset_email'] = email

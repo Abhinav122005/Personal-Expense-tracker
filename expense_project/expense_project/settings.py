@@ -138,10 +138,13 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_TIMEOUT = 10  # Prevent Gunicorn from hanging if SMTP connection fails
+EMAIL_TIMEOUT = 10
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
-# If credentials are not set, fallback to console backend for development
-if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
+# RENDER FREE TIER FIX:
+# Render blocks outbound SMTP (port 587) on Free Tier instances.
+# We detect if the app is running on Render, and if so, automatically
+# fallback to printing the OTP in the console logs so the app doesn't break!
+if os.environ.get('RENDER'):
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
