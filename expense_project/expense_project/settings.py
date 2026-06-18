@@ -133,18 +133,8 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 AUTH_USER_MODEL = 'tracker.CustomUser'
 
-# Email Configuration (SMTP)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_TIMEOUT = 10
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+# Resend API Configuration
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 
-# RENDER FREE TIER FIX:
-# Render blocks outbound SMTP (port 587) on Free Tier instances.
-# We detect if the app is running on Render, and if so, automatically
-# fallback to printing the OTP in the console logs so the app doesn't break!
-if os.environ.get('RENDER'):
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Remove SMTP configurations since we are using Resend API directly.
+# RENDER FREE TIER FIX: No longer needed because Resend uses standard HTTP!

@@ -14,6 +14,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.core.paginator import Paginator
 import openpyxl
+import resend
 import json
 
 from django import forms
@@ -98,13 +99,13 @@ def register_view(request):
             
             # Send OTP Email
             try:
-                send_mail(
-                    'Your Expense Tracker OTP Code',
-                    f'Your verification code is: {otp_code}',
-                    settings.EMAIL_HOST_USER,
-                    [email],
-                    fail_silently=False,
-                )
+                resend.api_key = settings.RESEND_API_KEY
+                resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [email],
+                    "subject": "Your Expense Tracker OTP Code",
+                    "html": f"<p>Your verification code is: <strong>{otp_code}</strong></p>"
+                })
             except Exception as e:
                 messages.error(request, f"Failed to send email. Error: {str(e)}")
                 print(f"EMAIL SEND ERROR: {e}")
@@ -199,13 +200,13 @@ def forgot_password_view(request):
             EmailOTP.objects.update_or_create(email=email, defaults={'otp_code': otp_code})
             
             try:
-                send_mail(
-                    'Password Reset OTP Code',
-                    f'Your password reset verification code is: {otp_code}',
-                    settings.EMAIL_HOST_USER,
-                    [email],
-                    fail_silently=False,
-                )
+                resend.api_key = settings.RESEND_API_KEY
+                resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [email],
+                    "subject": "Password Reset OTP Code",
+                    "html": f"<p>Your password reset verification code is: <strong>{otp_code}</strong></p>"
+                })
             except Exception as e:
                 messages.error(request, f"Failed to send email. Error: {str(e)}")
                 print(f"EMAIL SEND ERROR: {e}")
