@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Reset Code - Expense Tracker</title>
+    <title>Security Question - Expense Tracker</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'styles.css' %}?v=8">
 </head>
@@ -20,17 +20,21 @@
     {% endif %}
 
     <div class="auth-container">
-        <h1>Verify Code</h1>
-        <p style="color: var(--text-muted); margin-bottom: 2rem;">We sent a 6-digit code to <strong>{{ request.session.reset_email }}</strong></p>
+        <h1>Security Question</h1>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Please answer your security question to reset your password.</p>
+        
         <form method="post" class="auth-form">
             {% csrf_token %}
+            <div style="background-color: var(--bg-color); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color); text-align: center;">
+                <strong>{{ question_text }}</strong>
+            </div>
             <p>
-                <label for="id_otp_code">Enter 6-Digit Code:</label>
-                <input type="text" name="otp_code" maxlength="6" minlength="6" required id="id_otp_code" autofocus autocomplete="off">
+                <label for="id_security_answer">Your Answer:</label>
+                <input type="text" name="security_answer" required id="id_security_answer" autofocus>
             </p>
-            <button type="submit" class="auth-btn">Verify Code</button>
+            <button type="submit" class="auth-btn">Verify Answer</button>
         </form>
-        <p class="auth-link"><a href="{% url 'forgot_password' %}">Resend code</a></p>
+        <p class="auth-link"><a href="{% url 'forgot_password' %}">Back to Email</a></p>
     </div>
 
     <script>

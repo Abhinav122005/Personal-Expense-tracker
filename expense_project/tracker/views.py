@@ -77,9 +77,7 @@ def profile_view(request):
 # Authentication Views
 # ----------------------------------------------------
 import random
-from django.core.mail import send_mail
-from .serializers import RegistrationSerializer, OTPVerificationSerializer
-from .models import EmailOTP
+from .serializers import RegistrationSerializer, ForgotPasswordEmailSerializer, ResetPasswordSerializer
 import uuid
 
 def register_view(request):
@@ -89,31 +87,10 @@ def register_view(request):
     if request.method == 'POST':
         serializer = RegistrationSerializer(data=request.POST)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
-            
-            # Generate 6-digit OTP
-            otp_code = str(random.randint(100000, 999999))
-            
-            # Save OTP to database (overwrite if exists)
-            EmailOTP.objects.update_or_create(email=email, defaults={'otp_code': otp_code})
-            
-            # Send OTP Email
-            try:
-                resend.api_key = settings.RESEND_API_KEY
-                resend.Emails.send({
-                    "from": "onboarding@resend.dev",
-                    "to": [email],
-                    "subject": "Your Expense Tracker OTP Code",
-                    "html": f"<p>Your verification code is: <strong>{otp_code}</strong></p>"
-                })
-            except Exception as e:
-                messages.error(request, f"Failed to send email. Error: {str(e)}")
-                print(f"EMAIL SEND ERROR: {e}")
-            
-            # Save registration data in session
-            request.session['registration_data'] = serializer.validated_data
-            messages.success(request, f"OTP sent to {email}. Please verify.")
-            return redirect('verify_otp')
+            user = serializer.save()
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            messages.success(request, "Account created successfully!")
+            return redirect('index')
         else:
             for field, errors in serializer.errors.items():
                 for error in errors:
@@ -121,48 +98,6 @@ def register_view(request):
     
     return render(request, 'register.html')
 
-def verify_otp_view(request):
-    if request.user.is_authenticated:
-        return redirect('index')
-        
-    if 'registration_data' not in request.session:
-        messages.error(request, "Session expired. Please register again.")
-        return redirect('register')
-        
-    if request.method == 'POST':
-        serializer = OTPVerificationSerializer(data=request.POST)
-        if serializer.is_valid():
-            reg_data = request.session['registration_data']
-            email = reg_data['email']
-            otp_code = serializer.validated_data['otp_code']
-            
-            otp_record = EmailOTP.objects.filter(email=email).first()
-            
-            if otp_record and otp_record.otp_code == otp_code:
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                # OTP is valid! Create the user.
-                user = User.objects.create_user(
-                    email=email,
-                    password=reg_data['password'],
-                    display_name=reg_data['display_name'],
-                    gender=reg_data['gender']
-                )
-                
-                otp_record.delete()  # Clean up OTP
-                del request.session['registration_data'] # Clean up session
-                
-                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-                messages.success(request, "Account created successfully!")
-                return redirect('index')
-            else:
-                messages.error(request, "Invalid OTP code. Please try again.")
-        else:
-            for field, errors in serializer.errors.items():
-                for error in errors:
-                    messages.error(request, error)
-                    
-    return render(request, 'verify_otp.html')
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -195,25 +130,8 @@ def forgot_password_view(request):
         serializer = ForgotPasswordEmailSerializer(data=request.POST)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            otp_code = str(random.randint(100000, 999999))
-            
-            EmailOTP.objects.update_or_create(email=email, defaults={'otp_code': otp_code})
-            
-            try:
-                resend.api_key = settings.RESEND_API_KEY
-                resend.Emails.send({
-                    "from": "onboarding@resend.dev",
-                    "to": [email],
-                    "subject": "Password Reset OTP Code",
-                    "html": f"<p>Your password reset verification code is: <strong>{otp_code}</strong></p>"
-                })
-            except Exception as e:
-                messages.error(request, f"Failed to send email. Error: {str(e)}")
-                print(f"EMAIL SEND ERROR: {e}")
-                
             request.session['reset_email'] = email
-            messages.success(request, f"OTP sent to {email}. Please verify.")
-            return redirect('verify_reset_otp')
+            return redirect('security_question')
         else:
             for field, errors in serializer.errors.items():
                 for error in errors:
@@ -221,43 +139,44 @@ def forgot_password_view(request):
                     
     return render(request, 'forgot_password.html')
 
-def verify_reset_otp_view(request):
+def security_question_view(request):
     if request.user.is_authenticated:
         return redirect('index')
         
     if 'reset_email' not in request.session:
-        messages.error(request, "Session expired. Please request a new OTP.")
+        messages.error(request, "Session expired. Please start over.")
         return redirect('forgot_password')
         
+    email = request.session['reset_email']
+    user = get_user_model().objects.get(email=email)
+    
+    # Check if the user actually has a security question set
+    if not user.security_question or not user.security_answer:
+        messages.error(request, "This account does not have a security question set up. Cannot reset password.")
+        del request.session['reset_email']
+        return redirect('login')
+        
+    question_text = dict(get_user_model().SECURITY_QUESTIONS).get(user.security_question, "Unknown question")
+    
     if request.method == 'POST':
-        serializer = OTPVerificationSerializer(data=request.POST)
-        if serializer.is_valid():
-            email = request.session['reset_email']
-            otp_code = serializer.validated_data['otp_code']
-            
-            otp_record = EmailOTP.objects.filter(email=email).first()
-            
-            if otp_record and otp_record.otp_code == otp_code:
-                # Valid OTP! Mark session as authorized to reset password
-                request.session['can_reset_password'] = True
-                otp_record.delete()
-                messages.success(request, "Code verified! Please enter your new password.")
-                return redirect('reset_password')
-            else:
-                messages.error(request, "Invalid OTP code. Please try again.")
+        answer = request.POST.get('security_answer', '').strip()
+        
+        # Simple case-insensitive match
+        if answer.lower() == user.security_answer.lower().strip():
+            request.session['can_reset_password'] = True
+            messages.success(request, "Answer correct! Please enter your new password.")
+            return redirect('reset_password')
         else:
-            for field, errors in serializer.errors.items():
-                for error in errors:
-                    messages.error(request, error)
-                    
-    return render(request, 'verify_reset_otp.html')
+            messages.error(request, "Incorrect answer. Please try again.")
+            
+    return render(request, 'security_question.html', {'question_text': question_text})
 
 def reset_password_view(request):
     if request.user.is_authenticated:
         return redirect('index')
         
     if not request.session.get('can_reset_password'):
-        messages.error(request, "Unauthorized. Please verify your OTP first.")
+        messages.error(request, "Unauthorized. Please answer your security question first.")
         return redirect('forgot_password')
         
     if request.method == 'POST':

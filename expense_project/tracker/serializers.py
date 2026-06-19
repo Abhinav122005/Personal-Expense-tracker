@@ -1,29 +1,36 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from .models import EmailOTP
-import re
+from .models import CustomUser
 
-User = get_user_model()
+class RegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    security_question = serializers.CharField(required=True)
+    security_answer = serializers.CharField(required=True)
 
-class RegistrationSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
-    display_name = serializers.CharField(required=True, max_length=150)
-    gender = serializers.CharField(required=True, max_length=20)
-    password = serializers.CharField(required=True, write_only=True, min_length=8)
-    
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'password', 'display_name', 'gender', 'security_question', 'security_answer']
+
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
 
-class OTPVerificationSerializer(serializers.Serializer):
-    otp_code = serializers.CharField(required=True, max_length=6, min_length=6)
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password'],
+            display_name=validated_data['display_name'],
+            gender=validated_data.get('gender', ''),
+            security_question=validated_data['security_question'],
+            security_answer=validated_data['security_answer']
+        )
+        return user
 
 class ForgotPasswordEmailSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     
     def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
+        if not CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("We couldn't find an account with that email address.")
         return value
 

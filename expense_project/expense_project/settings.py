@@ -133,8 +133,4 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 AUTH_USER_MODEL = 'tracker.CustomUser'
 
-# Resend API Configuration
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-
-# Remove SMTP configurations since we are using Resend API directly.
-# RENDER FREE TIER FIX: No longer needed because Resend uses standard HTTP!
+# Email functionality has been removed in favor of Security Questions.

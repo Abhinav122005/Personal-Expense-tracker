@@ -36,7 +36,27 @@
             </p>
             <p>
                 <label for="id_gender">Gender:</label>
-                <input type="text" name="gender" maxlength="20" required id="id_gender">
+                <select name="gender" required id="id_gender">
+                    <option value="" disabled selected>Select Gender</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                    <option value="O">Other</option>
+                </select>
+            </p>
+            <p>
+                <label for="id_security_question">Security Question (Used to reset password):</label>
+                <select name="security_question" required id="id_security_question">
+                    <option value="" disabled selected>Select a question...</option>
+                    <option value="pet">What was the name of your first pet?</option>
+                    <option value="city">In what city were you born?</option>
+                    <option value="mother">What is your mother's maiden name?</option>
+                    <option value="school">What was the name of your first school?</option>
+                    <option value="car">What was the make of your first car?</option>
+                </select>
+            </p>
+            <p>
+                <label for="id_security_answer">Security Answer:</label>
+                <input type="text" name="security_answer" required id="id_security_answer" maxlength="255">
             </p>
             <p>
                 <label for="id_password">Password:</label>

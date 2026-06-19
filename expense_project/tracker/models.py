@@ -22,7 +22,23 @@ class CustomUser(AbstractUser):
     username = None  # Remove username field
     email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=150)
-    gender = models.CharField(max_length=20, blank=True, null=True)
+    GENDER_CHOICES = [
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('O', 'Other'),
+    ]
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True)
+    
+    # Security Question fields
+    SECURITY_QUESTIONS = [
+        ('pet', 'What was the name of your first pet?'),
+        ('city', 'In what city were you born?'),
+        ('mother', "What is your mother's maiden name?"),
+        ('school', 'What was the name of your first school?'),
+        ('car', 'What was the make of your first car?'),
+    ]
+    security_question = models.CharField(max_length=20, choices=SECURITY_QUESTIONS, blank=True, null=True)
+    security_answer = models.CharField(max_length=255, blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
@@ -38,14 +54,6 @@ class UserBudget(models.Model):
 
     def __str__(self):
         return f"{self.user.email}'s Budget (${self.amount})"
-
-class EmailOTP(models.Model):
-    email = models.EmailField(unique=True)
-    otp_code = models.CharField(max_length=6)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"OTP for {self.email}"
 
 class Expense(models.Model):
     """Represents a single expense transaction."""
